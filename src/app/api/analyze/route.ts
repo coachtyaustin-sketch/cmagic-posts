@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("AI Analysis API Error:", error.message);
     return NextResponse.json(
-      { error: "Failed to run AI analysis loop." },
+      { error: "Failed to run AI analysis loop.", details: error.message, stack: error.stack },
       { status: 500 }
     );
   }
