@@ -8,6 +8,8 @@ try {
     const match = line.match(/^([^=]+)=(.*)$/);
     if (match) {
       const key = match[1];
+      if (key === 'NEXTAUTH_URL') return;
+
       let val = match[2];
       
       // Trim quotes if present

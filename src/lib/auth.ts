@@ -4,6 +4,7 @@ import FacebookProvider from "next-auth/providers/facebook";
 import { prisma } from "./db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   adapter: PrismaAdapter(prisma),
   providers: [
     FacebookProvider({
