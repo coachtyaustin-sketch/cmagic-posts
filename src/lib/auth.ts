@@ -21,6 +21,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  debug: true,
   callbacks: {
     async session({ session, user }) {
       if (session.user) {
