@@ -3,6 +3,10 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import FacebookProvider from "next-auth/providers/facebook";
 import { prisma } from "./db";
 
+if (process.env.VERCEL) {
+  process.env.AUTH_URL = "https://cmagic-posts.vercel.app";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   adapter: PrismaAdapter(prisma),
