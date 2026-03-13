@@ -352,7 +352,15 @@ export default function DashboardClient({ session }: { session: any }) {
                                 <>
                                   <h4 className="font-semibold text-sm mb-2 text-indigo-300">Agent Status: Ready</h4>
                                   <p className="text-sm text-neutral-400 mb-4">Orchestrator has received {insightsData.data.length} media payloads. Ready to deploy Vision and NLP Agents to analyze visual hooks and cross-reference with high share velocity.</p>
-                                  <Button size="sm" className="w-full bg-indigo-500 hover:bg-indigo-600 text-white">Initialize Analysis</Button>
+                                  <Button 
+                                    onClick={handleAnalyze}
+                                    disabled={analyzing}
+                                    size="sm" 
+                                    className="w-full bg-indigo-500 hover:bg-indigo-600 text-white"
+                                  >
+                                      {analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BrainCircuit className="mr-2 h-4 w-4"/>}
+                                      {analyzing ? "Orchestrator is Processing..." : "Initialize Analysis"}
+                                  </Button>
                                 </>
                             ) : (
                                 <>
