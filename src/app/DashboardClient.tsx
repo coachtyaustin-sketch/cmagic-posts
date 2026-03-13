@@ -100,7 +100,10 @@ export default function DashboardClient({ session }: { session: any }) {
               body: JSON.stringify({ posts: insightsData.data })
           });
           const result = await res.json();
-          if (!res.ok) throw new Error(result.error || "Failed AI analysis");
+          if (!res.ok) {
+              console.error("AI Pipeline Error payload:", result);
+              throw new Error(result.details ? `${result.error} (Details: ${result.details})` : result.error || "Failed AI analysis");
+          }
           setStrategyData(result.data.strategy);
       } catch (err: any) {
           setError(err.message);
