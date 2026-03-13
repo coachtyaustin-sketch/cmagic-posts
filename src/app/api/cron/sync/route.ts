@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     // Find all IG accounts we've seen before
     const accounts = await prisma.igAccount.findMany({
         where: {
-            accessToken: { not: null }
+            accessToken: { not: "" }
         }
     });
 
