@@ -351,7 +351,7 @@ export default function DashboardClient({ session }: { session: any }) {
                   <CardContent>
                     <div className="space-y-4">
                         <div className="p-4 rounded-lg bg-neutral-950/50 border border-neutral-800">
-                            {insightsData ? (
+                            {insightsData && insightsData.data && insightsData.data.length > 0 ? (
                                 <>
                                   <h4 className="font-semibold text-sm mb-2 text-indigo-300">Agent Status: Ready</h4>
                                   <p className="text-sm text-neutral-400 mb-4">Orchestrator has received {insightsData.data.length} media payloads. Ready to deploy Vision and NLP Agents to analyze visual hooks and cross-reference with high share velocity.</p>
@@ -368,7 +368,7 @@ export default function DashboardClient({ session }: { session: any }) {
                             ) : (
                                 <>
                                   <h4 className="font-semibold text-sm mb-2 text-indigo-300">Awaiting API Payload</h4>
-                                  <p className="text-sm text-neutral-400">Sync your account to activate the Orchestrator, Hook, Sentiment, and Critique Agents.</p>
+                                  <p className="text-sm text-neutral-400">Your account has 0 cached posts. Please click "Generate New Report" above to sync your account to activate the Orchestrator, Hook, Sentiment, and Critique Agents.</p>
                                 </>
                             )}
                         </div>

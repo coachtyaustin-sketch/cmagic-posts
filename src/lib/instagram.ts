@@ -74,19 +74,33 @@ export class InstagramGraphAPI {
   async getMediaInsights(mediaId: string, mediaType: string) {
     try {
       // Standard metrics for all types
-      let metric = "reach,saved,shares";
-      
-      // Since early 2025, impressions/plays were deprecated for a unified 'views' metric
-      metric += ",views";
+      let metric = "reach,saved,shares,views";
 
-      const insightsResponse = await axios.get(`${BASE_URL}/${mediaId}/insights`, {
-        params: {
-          access_token: this.accessToken,
-          metric: metric,
-          metric_type: "total_value", // REQUIRED for unified metrics
-          breakdown: "follow_type",   // Slices Reach into FOLLOWER vs NON_FOLLOWER
-        },
-      });
+      let insightsResponse;
+      try {
+          // Attempt 1: Fetch with Follower/Non-Follower breakdown
+          insightsResponse = await axios.get(`${BASE_URL}/${mediaId}/insights`, {
+            params: {
+              access_token: this.accessToken,
+              metric: metric,
+              metric_type: "total_value",
+              breakdown: "follow_type",
+            },
+          });
+      } catch (firstError: any) {
+          // If the breakdown is incompatible (e.g. small accounts or certain reels), try without it
+          if (firstError.response?.data?.error?.code === 100) {
+              insightsResponse = await axios.get(`${BASE_URL}/${mediaId}/insights`, {
+                params: {
+                  access_token: this.accessToken,
+                  metric: metric,
+                  metric_type: "total_value"
+                },
+              });
+          } else {
+              throw firstError;
+          }
+      }
 
       const insights = insightsResponse.data.data;
       
@@ -100,12 +114,15 @@ export class InstagramGraphAPI {
 
       insights.forEach((insight: any) => {
         if (insight.name === "reach") {
-           // Handle breakdown
-           if (insight.values && insight.values[0] && insight.values[0].value) {
+           // Handle breakdown (Attempt 1 structure)
+           if (insight.values && insight.values[0] && insight.values[0].value && typeof insight.values[0].value === 'object') {
               const breakdownData = insight.values[0].value;
               result.reach.total = (breakdownData.FOLLOWER || 0) + (breakdownData.NON_FOLLOWER || 0);
               result.reach.follower = breakdownData.FOLLOWER || 0;
               result.reach.nonFollower = breakdownData.NON_FOLLOWER || 0;
+           } else if (insight.values && insight.values[0]) {
+               // Handle standard flat total (Attempt 2 structure)
+               result.reach.total = insight.values[0].value || 0;
            }
         } 
         else if (insight.name === "saved") {
@@ -123,7 +140,7 @@ export class InstagramGraphAPI {
     } catch (error: any) {
       console.error(`Error fetching insights for media ${mediaId}:`, error.response?.data || error.message);
       
-      // Handle the 100-follower threshold or regional EU shielding gracefully by returning 0s
+      // Handle regional EU shielding gracefully by returning 0s
       return {
         reach: { total: 0, follower: 0, nonFollower: 0 },
         saved: 0,
