@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import InstagramProvider from "next-auth/providers/instagram";
+import FacebookProvider from "next-auth/providers/facebook";
 import { prisma } from "./db";
 
 if (process.env.VERCEL) {
@@ -11,9 +11,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   adapter: PrismaAdapter(prisma),
   providers: [
-    InstagramProvider({
-      clientId: process.env.INSTAGRAM_CLIENT_ID as string,
-      clientSecret: process.env.INSTAGRAM_CLIENT_SECRET as string,
+    FacebookProvider({
+      clientId: process.env.FACEBOOK_CLIENT_ID as string,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string,
+      authorization: {
+        params: {
+          scope: "email public_profile instagram_basic instagram_manage_insights pages_show_list pages_read_engagement",
+        },
+      },
     }),
   ],
   callbacks: {
