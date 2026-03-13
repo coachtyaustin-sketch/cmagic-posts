@@ -19,6 +19,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: "public_profile instagram_basic instagram_manage_insights pages_show_list pages_read_engagement",
         },
       },
+      profile(profile) {
+        return {
+          id: profile.id,
+          name: profile.name,
+          email: profile.email || null,
+          image: profile.picture?.data?.url || null,
+        }
+      },
+      allowDangerousEmailAccountLinking: true,
     }),
   ],
   debug: true,
