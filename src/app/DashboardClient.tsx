@@ -1,27 +1,85 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Facebook, Instagram, BarChart3, BrainCircuit, Loader2 } from "lucide-react";
+import { Facebook, Instagram, BarChart3, BrainCircuit, Loader2, RefreshCw } from "lucide-react";
 import { signIn } from "next-auth/react";
 
-export default function Dashboard({ session }: { session: any }) {
+export default function DashboardClient({ session }: { session: any }) {
   const [syncing, setSyncing] = useState(false);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  
   const [insightsData, setInsightsData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [strategyData, setStrategyData] = useState<any>(null);
 
+  useEffect(() => {
+    if (session?.user) {
+        fetchAccounts();
+    } else {
+        setLoadingAccounts(false);
+    }
+  }, [session]);
+
+  const fetchAccounts = async () => {
+      try {
+          setLoadingAccounts(true);
+          const res = await fetch("/api/accounts");
+          const data = await res.json();
+          if (res.ok && data.accounts) {
+              setAccounts(data.accounts);
+              if (data.accounts.length > 0 && !selectedAccountId) {
+                  setSelectedAccountId(data.accounts[0].igUserId);
+                  fetchInsights(data.accounts[0].igUserId);
+              }
+          }
+      } catch (err) {
+          console.error("Failed to load accounts:", err);
+      } finally {
+          setLoadingAccounts(false);
+      }
+  };
+
+  const fetchInsights = async (igAccountId: string) => {
+    try {
+        setError(null);
+        setStrategyData(null);
+        const res = await fetch(`/api/insights?igAccountId=${igAccountId}`);
+        const data = await res.json();
+        if (res.ok) {
+            setInsightsData(data);
+        }
+    } catch (err: any) {
+        console.error("Failed to load insights from DB");
+    }
+  };
+
+  const handleAccountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newId = e.target.value;
+      setSelectedAccountId(newId);
+      fetchInsights(newId);
+  };
+
   const handleSync = async () => {
+    if (!selectedAccountId) return;
     setSyncing(true);
     setError(null);
     try {
-      const res = await fetch("/api/sync", { method: "POST" });
+      const res = await fetch("/api/sync", { 
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ igAccountId: selectedAccountId })
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to sync");
-      setInsightsData(data);
+      
+      // Reload insights from DB after sync finishes
+      fetchInsights(selectedAccountId);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -152,13 +210,27 @@ export default function Dashboard({ session }: { session: any }) {
         <div className="flex justify-between items-end mb-8">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight mb-2">Dashboard</h1>
-                {insightsData?.account ? (
-                    <p className="text-emerald-400 flex items-center gap-2">
-                        <Instagram className="w-4 h-4"/> 
-                        Connected: @{insightsData.account.username} ({insightsData.account.followers.toLocaleString()} followers)
+                {loadingAccounts ? (
+                    <p className="text-neutral-400 flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin"/> Loading your accounts...
                     </p>
+                ) : accounts.length > 0 ? (
+                    <div className="flex items-center gap-3">
+                        <Instagram className="w-4 h-4 text-emerald-400"/>
+                        <select 
+                            className="bg-neutral-900 border border-neutral-800 text-white text-sm rounded-md focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5"
+                            value={selectedAccountId || ""}
+                            onChange={handleAccountChange}
+                        >
+                            {accounts.map(acc => (
+                                <option key={acc.id} value={acc.igUserId}>
+                                    @{acc.username} ({acc.followers.toLocaleString()} followers)
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 ) : (
-                    <p className="text-neutral-400">Welcome back. Sync your account to view AI-driven performance.</p>
+                    <p className="text-neutral-400">Welcome back. No Instagram Professional accounts found linked to your Facebook.</p>
                 )}
             </div>
             <Button 

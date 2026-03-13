@@ -11,35 +11,101 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Since Meta Login hasn't successfully stored the token in Prisma yet due to the DB issue,
-    // we will inject the user's provided token directly from the ENV for this prototype sync API
-    const userAccessToken = process.env.FACEBOOK_ACCESS_TOKEN;
+    const body = await req.json();
+    const { igAccountId } = body;
 
-    if (!userAccessToken) {
-      return NextResponse.json({ error: "No Facebook Access Token available in environment." }, { status: 400 });
+    if (!igAccountId) {
+        return NextResponse.json({ error: "Missing igAccountId parameter." }, { status: 400 });
     }
 
-    const igApi = new InstagramGraphAPI(userAccessToken);
-    
-    // 1. Fetch linked accounts
-    const linkedAccounts = await igApi.getLinkedInstagramAccounts();
+    // 1. Fetch the specific account to get its stored access token
+    const igAccount = await prisma.igAccount.findUnique({
+        where: { igUserId: igAccountId, userId: session.user.id }
+    });
 
-    if (!linkedAccounts || linkedAccounts.length === 0) {
-        return NextResponse.json({ error: "No linked Professional Instagram accounts found." }, { status: 404 });
+    if (!igAccount || !igAccount.accessToken) {
+        return NextResponse.json({ error: "Linked account not found or token expired." }, { status: 404 });
     }
+
+    const igApi = new InstagramGraphAPI(igAccount.accessToken);
     
-    // We'll process the first linked account for demonstration
-    const activeAccount = linkedAccounts[0];
+    // 2. Fetch the 10 most recent media posts from Graph API
+    const recentMedia = await igApi.getRecentMedia(igAccountId, 10);
     
-    // 2. Fetch the 10 most recent media posts
-    const recentMedia = await igApi.getRecentMedia(activeAccount.igAccountId, 10);
-    
-    // 3. For each media post, fetch deep insights
+    // 3. For each media post, fetch deep insights and Upsert into DB
     const enrichedMedia = [];
     
     for (const post of recentMedia) {
         // Skip Stories or Albums if needed, but the Graph API supports Insights on IMAGE/VIDEO/CAROUSEL_ALBUM
-        const insights = await igApi.getMediaInsights(post.id, post.media_type);
+        const insights: any = await igApi.getMediaInsights(post.id, post.media_type);
+        
+        let viralityQuotient = null;
+        let discoverabilityIndex = null;
+        
+        // Calculate basic derived metrics
+        if (insights.reach && insights.reach.total > 0) {
+            viralityQuotient = (insights.reach.nonFollower / insights.reach.total) * 100;
+            // Simple discoverability heuristic 
+            discoverabilityIndex = (insights.shares + insights.saved) / insights.reach.total;
+        }
+
+        const timestamp = new Date(post.timestamp);
+
+        // Save Post Metadata
+        const savedPost = await prisma.mediaPost.upsert({
+            where: { mediaId: post.id },
+            update: {
+                mediaType: post.media_type,
+                mediaUrl: post.media_url,
+                permalink: post.permalink,
+                caption: post.caption,
+                timestamp: timestamp,
+                updatedAt: new Date()
+            },
+            create: {
+                igAccountId: igAccount.id, // Linking to our internal CUID, not the Graph ID
+                mediaId: post.id,
+                mediaType: post.media_type,
+                mediaUrl: post.media_url,
+                permalink: post.permalink,
+                caption: post.caption,
+                timestamp: timestamp,
+            }
+        });
+
+        // Save Post Insights
+        // If there was no error fetching insights
+        if (!insights.error) {
+            await prisma.mediaInsights.upsert({
+                where: { mediaPostId: savedPost.id },
+                update: {
+                    views: insights.views || 0,
+                    comments: 0, // Would need native webhooks or separate call to track comments, defaulting to 0 for MVP
+                    likes: 0, 
+                    shares: insights.shares || 0,
+                    saved: insights.saved || 0,
+                    totalReach: insights.reach?.total || 0,
+                    followerReach: insights.reach?.follower || 0,
+                    nonFollowerReach: insights.reach?.nonFollower || 0,
+                    viralityQuotient: viralityQuotient,
+                    discoverabilityIndex: discoverabilityIndex,
+                    updatedAt: new Date()
+                },
+                create: {
+                    mediaPostId: savedPost.id,
+                    views: insights.views || 0,
+                    comments: 0, 
+                    likes: 0, 
+                    shares: insights.shares || 0,
+                    saved: insights.saved || 0,
+                    totalReach: insights.reach?.total || 0,
+                    followerReach: insights.reach?.follower || 0,
+                    nonFollowerReach: insights.reach?.nonFollower || 0,
+                    viralityQuotient: viralityQuotient,
+                    discoverabilityIndex: discoverabilityIndex
+                }
+            });
+        }
         
         enrichedMedia.push({
             id: post.id,
@@ -47,7 +113,8 @@ export async function POST(req: Request) {
             caption: post.caption,
             url: post.permalink,
             timestamp: post.timestamp,
-            metrics: insights
+            metrics: insights,
+            dbId: savedPost.id
         });
         
         // Sleep briefly to respect Meta's BUC rate limits (200 calls/hr)
@@ -56,8 +123,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ 
         success: true, 
-        account: activeAccount,
-        data: enrichedMedia 
+        account: igAccount,
+        syncedPosts: enrichedMedia.length
     });
 
   } catch (error: any) {
